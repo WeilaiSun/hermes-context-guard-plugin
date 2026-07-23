@@ -1,0 +1,12 @@
+name: context-guard--plugin
+version: "2.3.0"
+description: "PACE predictive context compression — replaces full conversation history with multi-granularity compressed context before each LLM call. Uses BGE-M3 scoring, pressure-adaptive thresholds, and async LLM summaries. Includes pace_glimpse tool for on-demand full-text recovery."
+author: "Hermes Plugin Team"
+kind: standalone
+hooks:
+  - on_session_start
+  - on_session_end
+  - pre_llm_call
+  - transform_llm_output
+tools:
+  - pace_glimpse

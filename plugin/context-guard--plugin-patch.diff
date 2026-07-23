@@ -1,0 +1,63 @@
+--- a/hermes-agent/agent/turn_context.py
++++ b/hermes-agent/agent/turn_context.py
+@@ -691,6 +691,7 @@
+ 
+     # Plugin hook: pre_llm_call (context injected into user message, not system prompt).
+     plugin_user_context = ""
++    _plugin_replaced_messages = False
+     try:
+         from hermes_cli.plugins import invoke_hook as _invoke_hook
+         _pre_results = _invoke_hook(
+@@ -739,6 +740,20 @@
+             _ctx_parts.append(_piece)
+         if _ctx_parts:
+             plugin_user_context = "\n\n".join(_ctx_parts)
++        # ── context-guard--plugin: PACE replace_messages support ──
++        for r in _pre_results:
++            if isinstance(r, dict) and r.get("replace_messages") is not None:
++                _new_msgs = r["replace_messages"]
++                if isinstance(_new_msgs, list) and len(_new_msgs) > 0:
++                    _valid = all(isinstance(m, dict) and "role" in m for m in _new_msgs)
++                    if _valid:
++                        messages[:] = _new_msgs
++                        conversation_history = list(messages)
++                        _plugin_replaced_messages = True
++                        logger.info("context-guard: replace_messages applied (%d messages)", len(_new_msgs))
++                    else:
++                        logger.warning("context-guard: replace_messages invalid format, ignoring")
++                break
+     except Exception as exc:
+         logger.warning("pre_llm_call hook failed: %s", exc)
+ 
+@@ -748,7 +763,12 @@
+     # One-shot: staged by the gateway right before this turn, consumed here.
+     # Multimodal (list) content can't take the string sidecar — append a
+     # durable text part instead of dropping the fact.
+-    _gateway_notes = consume_gateway_turn_context_notes(agent)
++    _gateway_notes_raw = consume_gateway_turn_context_notes(agent)
++    _gateway_notes = _gateway_notes_raw if not _plugin_replaced_messages else None
++    if _plugin_replaced_messages and _gateway_notes_raw is not None:
++        _sys_idx = next((i for i, m in enumerate(messages) if m.get("role") == "system"), None)
++        if _sys_idx is not None:
++            messages[_sys_idx]["content"] += "\n\n" + _gateway_notes_raw
+     if _gateway_notes:
+         _gw_turn_content = (
+             messages[current_turn_user_idx].get("content")
+@@ -785,7 +805,7 @@
+         agent._interrupt_thread_signal_pending = False
+ 
+     # Notify memory providers of the new turn (BEFORE prefetch_all).
+-    if agent._memory_manager:
++    if agent._memory_manager and not _plugin_replaced_messages:
+         try:
+             _turn_msg = original_user_message if isinstance(original_user_message, str) else ""
+             agent._memory_manager.on_turn_start(agent._user_turn_count, _turn_msg)
+@@ -818,7 +838,7 @@
+     # copy AFTER this composition, so the stamped bytes would never match the
+     # wire either — skip the stamp rather than persist provably wrong "exact
+     # sent bytes" (MoA keeps its pre-sidecar cache behavior).
+-    if (
++    if not _plugin_replaced_messages and (
+         not moa_active
+         and getattr(agent, "api_mode", None) != "codex_app_server"
+         and 0 <= current_turn_user_idx < len(messages)

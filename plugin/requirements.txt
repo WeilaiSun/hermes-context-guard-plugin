@@ -1,0 +1,5 @@
+# context-guard--plugin v2.3 dependencies
+sentence-transformers>=3.0.0    # BGE-M3 model loading and inference
+torch>=2.0.0                    # PyTorch (sentence-transformers dependency)
+numpy>=1.24.0                   # vector operations (scorer dependency)
+openai>=1.30.0                  # DeepSeek API (OpenAI-compatible interface)

@@ -1,0 +1,56 @@
+# context-guard--plugin v2.3 — PACE configuration
+# All hyperparameters validated by PACE paper ablation (Table 2 + Appendix C).
+
+# ── PACE core parameters ──
+pace:
+  tau: 0.3                    # softmax temperature for attention weights (Table 2: -4.7~7.5%)
+  N: 2                        # recent rounds kept full-text (paper §3.3 fixed)
+  n_recent: 2                 # alias for N used in assemble_messages
+  alpha_0: 0.4                # base threshold: brief/ph boundary (Table 2: -5.3~8.3%)
+  beta_0: 0.8                 # base threshold: detailed/brief boundary
+  gamma_0: 1.5                # base threshold: full/detailed boundary
+  lambda_adapt: 0.5           # pressure adaptation factor (Table 2: -2~5%)
+  B_max: 128000               # context window size (tokens)
+  T_max: 200                  # max turns for pressure calc
+  L_max: null                 # null → use tokenizer.model_max_length dynamically
+
+# ── Memory store ──
+memory_store:
+  max_chunks: 200             # LRU eviction threshold
+  persist_path: null          # null → ~/.hermes/context-guard-memory.json
+
+# ── Scorer (BGE-M3) ──
+scorer:
+  model_name: "BAAI/bge-m3"
+  device: "cpu"               # CPU inference, target <1s/step
+  normalize_embeddings: true  # cosine via dot product
+  warmup_timeout: 30          # seconds to wait for model load on session start
+
+# ── Summarizer (async LLM summaries) ──
+summarizer:
+  provider: "deepseek"
+  model: "deepseek-chat"      # DeepSeek Flash (cheap + fast)
+  fallback_provider: "zai"
+  fallback_model: "qwen-plus"
+  timeout: 30                 # seconds per summary call
+  max_workers: 2              # ThreadPoolExecutor size
+  skip_threshold: 0.1         # skip chunks with w̃_i below this (save API cost)
+  detailed_target_words: 100  # R_detailed ~100 words
+  brief_target_sentences: 2   # R_brief 1-2 sentences
+
+# ── Glimpse tool ──
+glimpse:
+  max_per_step: 3             # ≤3 chunk retrievals per agent step (Table 2: -2.3~4.9%)
+
+# ── Watermark / boundary guard ──
+watermark:
+  warn_ratio: 0.8             # 80% of B_max → warn
+  critical_ratio: 0.95        # 95% → critical
+  hard_limit_ratio: 0.97      # 97% → hard limit
+  chars_per_token: 3.5        # rough estimate for token counting without tokenizer
+
+# ── Plugin behavior ──
+plugin:
+  min_history_length: 5       # skip compression if conversation_history < 5
+  disable_builtin_compression: true  # set threshold_percent=0.99 on session start
+  compact_regex: "\\bcompact\\b"     # force-compact trigger (v2.3: word boundary)
