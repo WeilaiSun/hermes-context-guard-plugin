@@ -233,10 +233,13 @@ def _on_session_start(**kwargs: Any) -> None:
 
 
 def _on_session_end(**kwargs: Any) -> None:
-    """Restore built-in compression and persist PACE state."""
-    global _session_active
+    """Restore built-in compression and persist PACE state.
 
-    _session_active = False
+    Note: Hermes fires on_session_end at the end of every turn,
+    NOT just at session close. Do NOT set _session_active=False here,
+    or pre_llm_call will be gated on every subsequent turn.
+    """
+    global _session_active
 
     # Persist memory store
     _memory_store.save()
